@@ -1,4 +1,5 @@
 ﻿using System;
+using System.IO;
 using System.Runtime.CompilerServices;
 using System.Text;
 using SixLabors.ImageSharp;
@@ -16,10 +17,22 @@ namespace ConRender
 
     public static class Frame
     {
+        static readonly Stream Stdout = Console.OpenStandardOutput();
+        static readonly Encoding Utf8 = Encoding.UTF8;
+
         public static bool RenderInfo = true;
         public static bool ResizeFrame = false;
+        public static bool DefaultPrint = false;
 
         static double LastFps;
+        static double AvgFps;
+        static bool AvgFpsInit;
+        const double AvgFpsAlpha = 0.1;
+
+        static double LastRenderMs;
+        static double LastPrintMs;
+        static double RenderOnlyFps;
+
         static int LastSrcW, LastSrcH;
 
         [MethodImpl(MethodImplOptions.AggressiveInlining)]
@@ -61,8 +74,28 @@ namespace ConRender
             map = ResizeImage(map, Console.BufferWidth, h);
         }
 
+        public static void FastPrint(string data)
+        {
+            var sw = System.Diagnostics.Stopwatch.StartNew();
+
+            if (DefaultPrint)
+            {
+                Console.Write(data);
+            }
+            else
+            {
+                byte[] bytes = Utf8.GetBytes(data);
+                Stdout.Write(bytes, 0, bytes.Length);
+            }
+
+            sw.Stop();
+            LastPrintMs = sw.Elapsed.TotalMilliseconds;
+        }
+
         public static string RenderImage(Image<Rgba32> map, ColorMode mode)
         {
+            var sw = System.Diagnostics.Stopwatch.StartNew();
+
             if (ResizeFrame)
                 AutoResize(ref map);
 
@@ -79,7 +112,7 @@ namespace ConRender
             {
                 sb.Append("\x1b[0m\x1b[41m\x1b[30m");
                 string info =
-                    $" FPS: {LastFps:0.0} | RES: {LastSrcW}x{LastSrcH} | MODE: {mode} ";
+                    $" FPS: {LastFps:0.0} | AVG: {AvgFps:0.0} | RENDER FPS: {RenderOnlyFps:0.0} | RENDER TIME: {LastRenderMs:0.00}ms | WRITE TIME: {LastPrintMs:0.00}ms | RES: {LastSrcW}x{LastSrcH} | MODE: {mode} ";
                 sb.Append(info.PadRight(Console.BufferWidth));
                 sb.Append("\x1b[0m\n");
             }
@@ -149,12 +182,27 @@ namespace ConRender
             }
 
             sb.Append("\x1b[0m");
+
+            sw.Stop();
+            LastRenderMs = sw.Elapsed.TotalMilliseconds;
+            RenderOnlyFps = LastRenderMs > 0 ? 1000.0 / LastRenderMs : 0;
+
             return sb.ToString();
         }
 
         public static void UpdateFps(double fps)
         {
             LastFps = fps;
+
+            if (!AvgFpsInit)
+            {
+                AvgFps = fps;
+                AvgFpsInit = true;
+            }
+            else
+            {
+                AvgFps = AvgFps + (fps - AvgFps) * AvgFpsAlpha;
+            }
         }
 
         public static string RenderImageFile(string fileName, ColorMode mode)

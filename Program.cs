@@ -1,5 +1,6 @@
 ﻿using System;
 using System.Diagnostics;
+using System.Text;
 using SixLabors.ImageSharp;
 using SixLabors.ImageSharp.PixelFormats;
 
@@ -27,6 +28,9 @@ namespace ConRender
   --no-info
       Disable info bar
 
+  --default-print
+      Disable optimized console writer
+
 Available color mode values:");
 
             foreach (string name in Enum.GetNames<ColorMode>())
@@ -44,18 +48,21 @@ Available color mode values:");
             {
                 using var image = WindowCapture.CaptureWindow(windowTitle);
                 Console.SetCursorPosition(0, 0);
-                Console.Write(Frame.RenderImage(image, colorMode));
+                Frame.FastPrint(Frame.RenderImage(image, colorMode));
 
-                frames++;
-                double now = sw.Elapsed.TotalSeconds;
-
-                if (now - lastTime >= 1.0)
+                if (Frame.RenderInfo)
                 {
-                    fps = frames / (now - lastTime);
-                    frames = 0;
-                    lastTime = now;
+                    frames++;
+                    double now = sw.Elapsed.TotalSeconds;
 
-                    Frame.UpdateFps(fps);
+                    if (now - lastTime >= 1.0)
+                    {
+                        fps = frames / (now - lastTime);
+                        frames = 0;
+                        lastTime = now;
+
+                        Frame.UpdateFps(fps);
+                    }
                 }
             }
         }
@@ -113,6 +120,11 @@ Available color mode values:");
                         runWindow = true;
                         break;
 
+                    case "--default-print":
+                        Frame.DefaultPrint = true;
+                        Console.OutputEncoding = new UTF8Encoding(false);
+                        break;
+
                     default:
                         IO.ArgumentError($"Unknown argument: {arg}");
                         return;
@@ -127,7 +139,7 @@ Available color mode values:");
 
             if (runImage)
             {
-                Console.WriteLine(Frame.RenderImageFile(imageFile, mode));
+                Frame.FastPrint(Frame.RenderImageFile(imageFile, mode));
                 return;
             }
 
